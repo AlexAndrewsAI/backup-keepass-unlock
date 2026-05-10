@@ -1,4 +1,4 @@
-
+AGENTS.md
 # Test files
 tests/borg/
 
@@ -80,3 +80,4 @@ Thumbs.db
 # Project specific
 *.log
 debug.log
+

@@ -36,17 +36,11 @@ uv sync
 The package includes a CLI tool built with **typer**:
 
 ```bash
-# List all backup profiles
-uv run python -m backup_keepass_unlock.cli list-profiles
+# Run all profiles in a config file
+uv run python -m backup_keepass_unlock.cli tests/backup.yml
 
 # Run a specific backup profile
-uv run python -m backup_keepass_unlock.cli run my-profile
-
-# Run all backups that are ready (haven't run in 24 hours)
-uv run python -m backup_keepass_unlock.cli run-ready
-
-# Run backups ready after custom hours threshold
-uv run python -m backup_keepass_unlock.cli run-ready --hours 48
+uv run python -m backup_keepass_unlock.cli tests/backup.yml --profile test2
 ```
 
 ## Development
@@ -82,8 +76,8 @@ uv run pytest -v
 # Show print statements during tests
 uv run pytest -s
 
-# Manually run test backup
-uv run python -m backup_keepass_unlock.cli run test-backup --config tests/backup.yml --database tests/test.kdbx
+# Manually run a single test backup profile
+uv run python -m backup_keepass_unlock.cli tests/backup.yml --profile test-backup
 ```
 
 ### Code Quality

@@ -51,12 +51,11 @@ class ConfigAllBackups(BaseModel):
     model_config = {"title": "All Backups Config"}
 
     @classmethod
-    def load(cls, config_path: str | None = None) -> "ConfigAllBackups":
+    def load(cls, config_path: str) -> "ConfigAllBackups":
         """Load backup profiles from a YAML file.
 
         Args:
-            config_path: Path to the YAML configuration file. If not provided,
-                       looks for 'backup_profiles.yaml' in the current directory.
+            config_path: Path to the YAML configuration file.
 
         Returns:
             ConfigAllBackups instance with loaded profiles.
@@ -64,8 +63,6 @@ class ConfigAllBackups(BaseModel):
         Raises:
             FileNotFoundError: If the configuration file is not found.
         """
-        if config_path is None:
-            config_path = "backup_profiles.yaml"
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Backup profiles not found at {path}")

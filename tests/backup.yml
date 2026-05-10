@@ -12,3 +12,12 @@ profiles:
       - tests/dir/excludeme
     must_exist:
       - tests/dir/README.md
+  test2:
+    type: borg
+    title: borg
+    input:
+      - tests/dir
+    output: tests/borg
+    exclude: []
+    must_exist:
+      - tests/dir/README.md

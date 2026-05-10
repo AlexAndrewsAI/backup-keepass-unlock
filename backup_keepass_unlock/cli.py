@@ -11,47 +11,33 @@ app = typer.Typer(help="Backup after decrypting CLI")
 
 
 @app.command()
-def list_profiles(
-    config_path: str = typer.Option(None,
-        "--config", "-c",
-        help="Path to backup profiles YAML file"
-    ),
-) -> None:
-    """List all backup profiles.
-
-    Args:
-        config_path: Path to the backup profiles configuration file.
-    """
-    try:
-        config = ConfigAllBackups.load(config_path) if config_path else ConfigAllBackups.load()
-        typer.echo(config.model_dump_json(indent=2))
-    except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(code=1)
-
-
-@app.command()
 def run(
-    profile_name: str = typer.Argument(..., help="Name of the backup profile to run"),
-    config_path: str = typer.Option(None,
-        "--config", "-c",
-        help="Path to backup profiles YAML file"
+    config_path: str = typer.Argument(..., help="Path to backup profiles YAML file"),
+    profile_name: str = typer.Option(None,
+        "--profile", "-p",
+        help="Name of the backup profile to run"
     ),
 ) -> None:
-    """Run a specific backup profile.
+    """Run a specific backup profile, or all profiles if none is given.
 
     Args:
-        profile_name: Name of the backup profile to run.
         config_path: Path to the backup profiles configuration file.
+        profile_name: Name of the backup profile to run. If not provided, runs all profiles.
     """
     try:
-        config = ConfigAllBackups.load(config_path) if config_path else ConfigAllBackups.load()
-        if profile_name not in config.profiles:
+        config = ConfigAllBackups.load(config_path)
+        if profile_name is not None and profile_name not in config.profiles:
             typer.echo(f"Error: Profile '{profile_name}' not found", err=True)
             raise typer.Exit(code=1)
 
-        run_backup(profile_name, config.profiles[profile_name], database_path=config.database_path)
-        typer.echo(f"Backup '{profile_name}' completed successfully")
+        if profile_name is not None:
+            run_backup(profile_name, config.profiles[profile_name], database_path=config.database_path)
+            typer.echo(f"Backup '{profile_name}' completed successfully")
+        else:
+            kp = None
+            for name, profile_config in config.profiles.items():
+                kp = run_backup(name, profile_config, database_path=config.database_path, kp=kp, return_kp=True)
+                typer.echo(f"Backup '{name}' completed successfully")
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(code=1)
