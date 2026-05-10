@@ -5,7 +5,7 @@ Provides a typer-based CLI for the package.
 
 import typer
 
-from backup_keepass_unlock.backup import run_backup, ConfigAllBackups
+from backup_keepass_unlock.backup import ConfigAllBackups, run_backups
 
 app = typer.Typer(help="Backup after decrypting CLI")
 
@@ -22,7 +22,7 @@ def run(
 
     Args:
         config_path: Path to the backup profiles configuration file.
-        profile_name: Name of the backup profile to run. If not provided, runs all profiles.
+        profile_name: Name of the backup profile to run (runs all of None)
     """
     try:
         config = ConfigAllBackups.load(config_path)
@@ -30,14 +30,7 @@ def run(
             typer.echo(f"Error: Profile '{profile_name}' not found", err=True)
             raise typer.Exit(code=1)
 
-        if profile_name is not None:
-            run_backup(profile_name, config.profiles[profile_name], database_path=config.database_path)
-            typer.echo(f"Backup '{profile_name}' completed successfully")
-        else:
-            kp = None
-            for name, profile_config in config.profiles.items():
-                kp = run_backup(name, profile_config, database_path=config.database_path, kp=kp, return_kp=True)
-                typer.echo(f"Backup '{name}' completed successfully")
+        run_backups(config, profile_name=profile_name)
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(code=1)

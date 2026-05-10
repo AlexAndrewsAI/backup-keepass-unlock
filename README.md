@@ -24,7 +24,7 @@ This package provides:
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/AlexAndrewsAI/python-package-template.git
+git clone https://github.com/AlexAndrewsAI/backup-keepass-unlockgit
 cd backup-keepass-unlock
 uv sync
 ```

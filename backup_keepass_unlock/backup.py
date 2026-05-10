@@ -8,13 +8,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-from pydantic import BaseModel, Field
-
-
+import yaml  # type: ignore[import-untyped]
 from keepass_wrapper.keepass import KeePass  # type: ignore[import-untyped]
-
-
+from pydantic import BaseModel, Field
 
 
 class ConfigBackup(BaseModel):
@@ -66,7 +62,7 @@ class ConfigAllBackups(BaseModel):
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Backup profiles not found at {path}")
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
         return cls(
             database_path=data['database_path'],
@@ -150,3 +146,28 @@ def run_backup(
     if return_kp:
         return kp
     return None
+
+
+def run_backups(config: ConfigAllBackups, profile_name: str | None = None) -> None:
+    """Run backup profiles from a configuration.
+
+    Args:
+        config: The loaded backup configuration.
+        profile_name: Name of a specific profile to run. If None, all profiles are run.
+    """
+    if profile_name is not None:
+        run_backup(
+            profile_name,
+            config.profiles[profile_name],
+            database_path=config.database_path
+        )
+    else:
+        kp = None
+        for name, profile_config in config.profiles.items():
+            kp = run_backup(
+                name,
+                profile_config,
+                database_path=config.database_path,
+                kp=kp,
+                return_kp=True,
+            )
