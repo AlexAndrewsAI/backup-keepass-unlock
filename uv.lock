@@ -112,7 +112,7 @@ wheels = [
 ]
 
 [[package]]
-name = "backup-after-decrypting"
+name = "backup-keepass-unlock"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

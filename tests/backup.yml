@@ -1,0 +1,12 @@
+profiles:
+  test-backup:
+    type: borg
+    pw_entry: borg
+    input:
+      - /home/deck/sandbox-home/utilities/python/backup-keepass-unlock/tests/dir
+    output: /home/deck/sandbox-home/utilities/python/backup-keepass-unlock/tests/borg
+    exclude: []
+    mount: []
+    prescript: ""
+    must_exist: []
+    postscript: ""

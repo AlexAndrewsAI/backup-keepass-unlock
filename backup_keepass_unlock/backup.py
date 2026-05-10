@@ -75,7 +75,7 @@ class ConfigAllBackups(BaseModel):
             raise FileNotFoundError(f"Backup profiles not found at {path}")
         with open(path, 'r') as f:
             data = yaml.safe_load(f)
-        return cls(profiles={k: ConfigBackup(**v) for k, v in data.items()})
+        return cls(profiles={k: ConfigBackup(**v) for k, v in data.get('profiles', {}).items()})
 
 
 
@@ -118,10 +118,18 @@ class Backup:
         logging.info(f"Running borg backup for '{self.name}'")
         logging.debug(f"Borg command: {cmd}")
         
-        entry = self.kp.find_entry(self.config.pw_entry)
+        entries = self.kp.find_entries(title=self.config.pw_entry, exact=True)
+        if not entries:
+            logging.error(f"No KeePass entry found for '{self.config.pw_entry}'")
+            raise ValueError(f"KeePass entry '{self.config.pw_entry}' not found")
+        entry = entries[0]
         logging.debug(f"Found KeePass entry: {entry}")
         
-        os.environ['BORG_PASSPHRASE'] = entry.password
+        password = entry.get_password()
+        if password is None:
+            logging.error(f"Password not found for entry '{self.config.pw_entry}'")
+            raise ValueError(f"Password not found for entry '{self.config.pw_entry}'")
+        os.environ['BORG_PASSPHRASE'] = password
         logging.info("Borg passphrase set from KeePass")
         
         result = os.system(cmd)

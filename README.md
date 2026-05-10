@@ -1,4 +1,4 @@
-# backup-after-decrypting
+# backup-keepass-unlock
 
 A Python package for managing backup profiles with configuration management.
 
@@ -25,7 +25,7 @@ Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/AlexAndrewsAI/python-package-template.git
-cd backup-after-decrypting
+cd backup-keepass-unlock
 uv sync
 ```
 
@@ -37,16 +37,16 @@ The package includes a CLI tool built with **typer**:
 
 ```bash
 # List all backup profiles
-uv run python -m backup_after_decrypting.cli list-profiles
+uv run python -m backup_keepass_unlock.cli list-profiles
 
 # Run a specific backup profile
-uv run python -m backup_after_decrypting.cli run-backup my-profile
+uv run python -m backup_keepass_unlock.cli run-backup my-profile
 
 # Run all backups that are ready (haven't run in 24 hours)
-uv run python -m backup_after_decrypting.cli run-ready
+uv run python -m backup_keepass_unlock.cli run-ready
 
 # Run backups ready after custom hours threshold
-uv run python -m backup_after_decrypting.cli run-ready --hours 48
+uv run python -m backup_keepass_unlock.cli run-ready --hours 48
 ```
 
 ## Development
@@ -76,20 +76,20 @@ uv run pytest -s
 
 ```bash
 # Lint code
-uv run ruff check backup_after_decrypting tests
+uv run ruff check backup_keepass_unlock tests
 
 # Type check
-uv run mypy backup_after_decrypting
+uv run mypy backup_keepass_unlock
 ```
 
 ## Project Structure
 
 ```
-backup-after-decrypting/
+backup-keepass-unlock/
 ├── .gitignore
 ├── pyproject.toml
 ├── README.md
-├── backup_after_decrypting/
+├── backup_keepass_unlock/
 │   ├── __init__.py
 │   ├── cli.py
 │   └── backup.py

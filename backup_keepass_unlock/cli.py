@@ -5,7 +5,7 @@ Provides a typer-based CLI for the package.
 
 import typer
 
-from backup_after_decrypting.backup import Backup, ConfigAllBackups
+from backup_keepass_unlock.backup import Backup, ConfigAllBackups
 
 app = typer.Typer(help="Backup after decrypting CLI")
 
@@ -46,7 +46,7 @@ def run_backup(
 
     Args:
         profile_name: Name of the backup profile to run.
-        config_path: Path to the backup profiles configuration file.
+        config_path: Path to the backup profiles configuration fil e.
         database_path: Path to the KeePass database file.
     """
     try:

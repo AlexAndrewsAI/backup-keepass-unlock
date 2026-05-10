@@ -1,5 +1,5 @@
 [project]
-name = "backup-after-decrypting"
+name = "backup-keepass-unlock"
 version = "0.1.0"
 description = "Backup tool using borg and KeePass for password management"
 readme = "README.md"
@@ -35,12 +35,12 @@ dev = [
 ]
 
 [project.scripts]
-backup-after-decrypting = "backup_after_decrypting.cli:app"
+backup-keepass-unlock = "backup_keepass_unlock.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/AlexAndrewsAI/backup-after-decrypting"
-Repository = "https://github.com/AlexAndrewsAI/backup-after-decrypting.git"
-Documentation = "https://github.com/AlexAndrewsAI/backup-after-decrypting#readme"
+Homepage = "https://github.com/AlexAndrewsAI/backup-keepass-unlock"
+Repository = "https://github.com/AlexAndrewsAI/backup-keepass-unlock.git"
+Documentation = "https://github.com/AlexAndrewsAI/backup-keepass-unlock#readme"
 
 [tool.uv]
 
