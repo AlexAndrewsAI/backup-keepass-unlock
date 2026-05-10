@@ -1,10 +1,14 @@
+# Keepass database
+database_path: tests/test.kdbx
+# Test backup configuration
 profiles:
   test-backup:
     type: borg
-    pw_entry: borg
+    title: borg
     input:
       - tests/dir
     output: tests/borg
-    exclude: []
+    exclude:
+      - tests/dir/excludeme
     must_exist:
       - tests/dir/README.md

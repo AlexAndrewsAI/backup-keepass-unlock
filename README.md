@@ -40,7 +40,7 @@ The package includes a CLI tool built with **typer**:
 uv run python -m backup_keepass_unlock.cli list-profiles
 
 # Run a specific backup profile
-uv run python -m backup_keepass_unlock.cli run-backup my-profile
+uv run python -m backup_keepass_unlock.cli run my-profile
 
 # Run all backups that are ready (haven't run in 24 hours)
 uv run python -m backup_keepass_unlock.cli run-ready
@@ -50,6 +50,17 @@ uv run python -m backup_keepass_unlock.cli run-ready --hours 48
 ```
 
 ## Development
+
+### Setup Test Environment
+
+Before running tests, initialize the borg repository for testing:
+
+```bash
+mkdir -p tests/borg
+borg init --encryption=repokey tests/borg
+```
+
+When prompted for a password, use: `b1`
 
 ### Install Dev Dependencies
 
@@ -70,6 +81,9 @@ uv run pytest -v
 
 # Show print statements during tests
 uv run pytest -s
+
+# Manually run test backup
+uv run python -m backup_keepass_unlock.cli run test-backup --config tests/backup.yml --database tests/test.kdbx
 ```
 
 ### Code Quality
