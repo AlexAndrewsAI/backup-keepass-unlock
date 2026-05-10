@@ -5,6 +5,7 @@ Provides backup functionality using borg and KeePass for password management.
 
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -78,7 +79,7 @@ class Backup:
     Handles the execution of backup operations using borg and KeePass.
     """
 
-    def __init__(self, name: str, config: ConfigBackup, database_path: str, kp= Keepass | None):
+    def __init__(self, name: str, config: ConfigBackup, database_path: str, kp: KeePass | None = None):
         """Initialize the Backup instance.
 
         Args:
@@ -101,10 +102,12 @@ class Backup:
 
     def borg(self) -> None:
         """Execute borg backup."""
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        archive_name = f"{self.name}_{timestamp}"
         cmd = "borg create  --progress  --json --filter=AME -C lz4"
         for e in self.config.exclude:
             cmd += f' --exclude="{e}"'
-        cmd += f' "{self.config.output}"::{self.name}'
+        cmd += f' "{self.config.output}"::{archive_name}'
         for i in self.config.input:
             cmd += f' "{i}"'
         

@@ -3,7 +3,8 @@ profiles:
     type: borg
     pw_entry: borg
     input:
-      - /home/deck/sandbox-home/utilities/python/backup-keepass-unlock/tests/dir
-    output: /home/deck/sandbox-home/utilities/python/backup-keepass-unlock/tests/borg
+      - tests/dir
+    output: tests/borg
     exclude: []
-    must_exist: []
+    must_exist:
+      - tests/dir/README.md
