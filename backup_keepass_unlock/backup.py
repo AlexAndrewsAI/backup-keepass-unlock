@@ -5,6 +5,7 @@ Provides backup functionality using borg and KeePass for password management.
 
 import logging
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -106,12 +107,12 @@ def run_backup(
     if config.type == "borg":
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         archive_name = f"{name}_{timestamp}"
-        cmd = "borg create  --progress  --json --filter=AME -C lz4"
-        for e in config.exclude:
-            cmd += f' --exclude="{e}"'
-        cmd += f' "{config.output}"::{archive_name}'
-        for i in config.input:
-            cmd += f' "{i}"'
+        cmd = [
+            "borg", "create", "--progress", "--json", "--filter=AME", "-C", "lz4",
+            *[f"--exclude={e}" for e in config.exclude],
+            f"{config.output}::{archive_name}",
+            *config.input,
+        ]
 
         logging.info(f"Running borg backup for '{name}'")
         logging.debug(f"Borg command: {cmd}")
@@ -127,16 +128,16 @@ def run_backup(
         if password is None:
             logging.error(f"Password not found for entry '{config.title}'")
             raise ValueError(f"Password not found for entry '{config.title}'")
-        os.environ['BORG_PASSPHRASE'] = password
+
+        env = os.environ.copy()
+        env["BORG_PASSPHRASE"] = password
         logging.info("Borg passphrase set from KeePass")
 
-        result = os.system(cmd)
-        os.environ["BORG_PASSPHRASE"] = ""
-
-        if result != 0:
-            logging.error(f"Borg backup failed with exit code {result}")
-        else:
-            logging.info(f"Borg backup completed successfully for '{name}'")
+        result = subprocess.run(cmd, env=env)
+        if result.returncode != 0:
+            logging.error(f"Borg backup failed with exit code {result.returncode}")
+            raise RuntimeError(f"Borg backup failed with exit code {result.returncode}")
+        logging.info(f"Borg backup completed successfully for '{name}'")
     else:
         logging.error(f"Unknown backup type: {config.type}")
         raise ValueError("Unknown backup type")
