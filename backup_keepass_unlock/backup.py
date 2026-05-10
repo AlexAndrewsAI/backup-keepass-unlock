@@ -6,7 +6,6 @@ Provides backup functionality using borg and KeePass for password management.
 import logging
 import os
 from pathlib import Path
-from typing import List, Dict
 
 import yaml
 from pydantic import BaseModel, Field
@@ -26,20 +25,14 @@ class ConfigBackup(BaseModel):
         input: List of paths to backup.
         output: Output path for the backup.
         exclude: List of patterns to exclude from backup.
-        mount: List of mount points to check.
-        prescript: Command to run before backing up.
         must_exist: List of paths that must exist before backup.
-        postscript: Command to run after backing up.
     """
     type: str = Field(description="Type of backup (e.g., 'borg')")
     pw_entry: str = Field(description="KeePass entry name for the backup password")
-    input: List[str] = Field(description="List of paths to backup")
+    input: list[str] = Field(description="List of paths to backup")
     output: str = Field(description="Output path for the backup")
-    exclude: List[str] = Field(default_factory=list, description="Patterns to exclude from backup")
-    mount: List[str] = Field(default_factory=list, description="Mount points to check")
-    prescript: str = Field(default="", description="Command to run before backing up")
-    must_exist: List[str] = Field(default_factory=list, description="Paths that must exist before backup")
-    postscript: str = Field(default="", description="Command to run after backing up")
+    exclude: list[str] = Field(default_factory=list, description="Patterns to exclude from backup")
+    must_exist: list[str] = Field(default_factory=list, description="Paths that must exist before backup")
 
     model_config = {"title": "Backup Config"}
 
@@ -50,7 +43,7 @@ class ConfigAllBackups(BaseModel):
     Attributes:
         profiles: Dictionary of profile names to their configurations.
     """
-    profiles: Dict[str, ConfigBackup] = Field(default_factory=dict, description="Backup profiles")
+    profiles: dict[str, ConfigBackup] = Field(default_factory=dict, description="Backup profiles")
 
     model_config = {"title": "All Backups Config"}
 
@@ -85,7 +78,7 @@ class Backup:
     Handles the execution of backup operations using borg and KeePass.
     """
 
-    def __init__(self, name: str, config: ConfigBackup, database_path: str, kp=None):
+    def __init__(self, name: str, config: ConfigBackup, database_path: str, kp= Keepass | None):
         """Initialize the Backup instance.
 
         Args:
@@ -144,13 +137,9 @@ class Backup:
     def run(self) -> None:
         """Run the backup operation.
 
-        Executes prescript, validates paths, runs the backup, and executes postscript.
+        Validates paths and runs the backup.
         """
         logging.info(f"Starting backup '{self.name}'")
-        
-        if self.config.prescript:
-            logging.info(f"Running prescript: {self.config.prescript}")
-            os.system(self.config.prescript)
 
         for path in [self.config.output] + self.config.must_exist:
             if not Path(path).exists():
@@ -162,9 +151,5 @@ class Backup:
         else:
             logging.error(f"Unknown backup type: {self.config.type}")
             raise ValueError("Unknown backup type")
-
-        if self.config.postscript:
-            logging.info(f"Running postscript: {self.config.postscript}")
-            os.system(self.config.postscript)
         
         logging.info(f"Backup '{self.name}' completed successfully")
