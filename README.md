@@ -24,7 +24,7 @@ This package provides:
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/AlexAndrewsAI/backup-keepass-unlockgit
+git clone https://github.com/AlexAndrewsAI/backup-keepass-unlock.git
 cd backup-keepass-unlock
 uv sync
 ```
@@ -37,10 +37,10 @@ The package includes a CLI tool built with **typer**:
 
 ```bash
 # Run all profiles in a config file
-uv run python -m backup_keepass_unlock.cli tests/backup.yml
+uv run python3 -m backup_keepass_unlock.cli tests/backup.yml
 
 # Run a specific backup profile
-uv run python -m backup_keepass_unlock.cli tests/backup.yml --profile test2
+uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test2
 ```
 
 ## Development
@@ -59,7 +59,7 @@ When prompted for a password, use: `b1`
 ### Install Dev Dependencies
 
 ```bash
-uv sync
+uv sync --dev
 ```
 
 This installs all dependencies and dev tools (pytest, ruff, mypy).
@@ -77,7 +77,7 @@ uv run pytest -v
 uv run pytest -s
 
 # Manually run a single test backup profile
-uv run python -m backup_keepass_unlock.cli tests/backup.yml --profile test-backup
+uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test-backup
 ```
 
 ### Code Quality
@@ -95,14 +95,21 @@ uv run mypy backup_keepass_unlock
 ```
 backup-keepass-unlock/
 ├── .gitignore
+├── AGENTS.md
 ├── pyproject.toml
 ├── README.md
+├── uv.lock
 ├── backup_keepass_unlock/
 │   ├── __init__.py
-│   ├── cli.py
-│   └── backup.py
+│   ├── backup.py
+│   └── cli.py
 └── tests/
-    └── __init__.py
+    ├── __init__.py
+    ├── backup.yml
+    ├── borg/
+    ├── dir/
+    ├── test.kdbx
+    └── test_backup.py
 
 ```
 

@@ -94,13 +94,35 @@ class TestConfigAllBackups:
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(data))
         cfg = ConfigAllBackups.load(str(path))
-        assert cfg.database_path == "/tmp/test.kdbx"
+        assert cfg.database_path == Path("/tmp/test.kdbx")
         assert "p1" in cfg.profiles
         assert cfg.profiles["p1"].title == "t1"
 
     def test_load_missing_file(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             ConfigAllBackups.load(str(tmp_path / "missing.yml"))
+
+    def test_load_invalid_yaml_shape(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(["not", "a", "mapping"]))
+        with pytest.raises(ValueError, match="expected a YAML mapping"):
+            ConfigAllBackups.load(str(path))
+
+    def test_load_missing_database_path(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump({"profiles": {}}))
+        with pytest.raises(ValueError, match="missing 'database_path'"):
+            ConfigAllBackups.load(str(path))
+
+    def test_load_invalid_profiles_shape(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.yml"
+        path.write_text(
+            yaml.safe_dump(
+                {"database_path": str(tmp_path / "test.kdbx"), "profiles": ["bad"]}
+            )
+        )
+        with pytest.raises(ValueError, match="'profiles' must be a mapping"):
+            ConfigAllBackups.load(str(path))
 
 
 class TestRunBackup:
@@ -117,7 +139,7 @@ class TestRunBackup:
         mock_subprocess.return_value = MagicMock(returncode=0)
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             result = run_backup(
-                "test", borg_config, database_path=str(tmp_path / "test.kdbx")
+                "test", borg_config, database_path=tmp_path / "test.kdbx"
             )
         assert result is None
         mock_subprocess.assert_called_once()
@@ -141,7 +163,7 @@ class TestRunBackup:
             kp = run_backup(
                 "test",
                 borg_config,
-                database_path=str(tmp_path / "test.kdbx"),
+                database_path=tmp_path / "test.kdbx",
                 return_kp=True,
             )
         assert kp is mock_keepass.return_value
@@ -163,7 +185,7 @@ class TestRunBackup:
             result = run_backup(
                 "test",
                 borg_config,
-                database_path=str(tmp_path / "test.kdbx"),
+                database_path=tmp_path / "test.kdbx",
                 kp=existing_kp,
                 return_kp=True,
             )
@@ -185,7 +207,7 @@ class TestRunBackup:
             pytest.raises(ValueError, match="KeePass entry 'borg' not found"),
         ):
             run_backup(
-                "test", borg_config, database_path=str(tmp_path / "test.kdbx")
+                "test", borg_config, database_path=tmp_path / "test.kdbx"
             )
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
@@ -205,7 +227,7 @@ class TestRunBackup:
             pytest.raises(ValueError, match="Password not found for entry 'borg'"),
         ):
             run_backup(
-                "test", borg_config, database_path=str(tmp_path / "test.kdbx")
+                "test", borg_config, database_path=tmp_path / "test.kdbx"
             )
 
     @patch("backup_keepass_unlock.backup.KeePass")
@@ -214,7 +236,7 @@ class TestRunBackup:
     ) -> None:
         borg_config.output = str(tmp_path / "nonexistent")
         with pytest.raises(FileNotFoundError, match="does not exist"):
-            run_backup("test", borg_config, database_path=str(tmp_path / "test.kdbx"))
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.KeePass")
     def test_missing_must_exist_path(
@@ -222,7 +244,7 @@ class TestRunBackup:
     ) -> None:
         borg_config.must_exist = [str(tmp_path / "nonexistent")]
         with pytest.raises(FileNotFoundError, match="does not exist"):
-            run_backup("test", borg_config, database_path=str(tmp_path / "test.kdbx"))
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.KeePass")
     def test_unknown_backup_type(
@@ -236,7 +258,7 @@ class TestRunBackup:
         )
         (tmp_path / "out").mkdir()
         with pytest.raises(ValueError, match="Unknown backup type"):
-            run_backup("test", cfg, database_path=str(tmp_path / "test.kdbx"))
+            run_backup("test", cfg, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
     def test_borg_failure(
@@ -252,7 +274,7 @@ class TestRunBackup:
             pytest.raises(RuntimeError, match="Borg backup failed"),
         ):
             run_backup(
-                "test", borg_config, database_path=str(tmp_path / "test.kdbx")
+                "test", borg_config, database_path=tmp_path / "test.kdbx"
             )
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
@@ -266,7 +288,7 @@ class TestRunBackup:
         borg_config.exclude = ["*.tmp", "*.log"]
         mock_subprocess.return_value = MagicMock(returncode=0)
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
-            run_backup("test", borg_config, database_path=str(tmp_path / "test.kdbx"))
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
         cmd = mock_subprocess.call_args[0][0]
         assert "--exclude=*.tmp" in cmd
         assert "--exclude=*.log" in cmd
@@ -281,7 +303,7 @@ class TestRunBackup:
     ) -> None:
         mock_subprocess.return_value = MagicMock(returncode=0)
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
-            run_backup("test", borg_config, database_path=str(tmp_path / "test.kdbx"))
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
         env = mock_subprocess.call_args[1].get("env")
         assert env is not None
         assert env.get("BORG_PASSPHRASE") == "secret-password"
@@ -303,7 +325,7 @@ class TestRunBackups:
         must = tmp_path / "must"
         must.write_text("")
         cfg = ConfigAllBackups(
-            database_path=str(tmp_path / "test.kdbx"),
+            database_path=tmp_path / "test.kdbx",
             profiles={
                 "p1": ConfigBackup(
                     type="borg", title="borg", input=[str(inp)], output=str(out)
@@ -329,7 +351,7 @@ class TestRunBackups:
         inp = tmp_path / "input"
         inp.mkdir()
         cfg = ConfigAllBackups(
-            database_path=str(tmp_path / "test.kdbx"),
+            database_path=tmp_path / "test.kdbx",
             profiles={
                 "p1": ConfigBackup(
                     type="borg", title="borg", input=[str(inp)], output=str(out)
@@ -343,6 +365,22 @@ class TestRunBackups:
             run_backups(cfg, profile_name="p1")
         assert mock_subprocess.call_count == 1
         mock_keepass.assert_called_once()
+
+    def test_unknown_profile_raises_value_error(self, tmp_path: Path) -> None:
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        cfg = ConfigAllBackups(
+            database_path=tmp_path / "test.kdbx",
+            profiles={
+                "p1": ConfigBackup(
+                    type="borg", title="borg", input=[str(inp)], output=str(out)
+                ),
+            },
+        )
+        with pytest.raises(ValueError, match="Profile 'missing' not found"):
+            run_backups(cfg, profile_name="missing")
 
 
 class TestCli:

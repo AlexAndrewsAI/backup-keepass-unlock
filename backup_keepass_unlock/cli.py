@@ -3,9 +3,13 @@
 Provides a typer-based CLI for the package.
 """
 
+import logging
+
 import typer
 
 from backup_keepass_unlock.backup import ConfigAllBackups, run_backups
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 app = typer.Typer(help="Backup after decrypting CLI")
 
@@ -34,7 +38,7 @@ def run(
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(code=1)
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         typer.echo(f"Error running backup: {e}", err=True)
         raise typer.Exit(code=1)
 

@@ -117,9 +117,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "keepass-wrapper" },
-    { name = "mypy" },
     { name = "pydantic" },
-    { name = "pytest" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
@@ -132,13 +130,19 @@ dev = [
     { name = "types-pyyaml" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "types-pyyaml" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "keepass-wrapper", git = "https://github.com/AlexAndrewsAI/keepass-wrapper.git" },
-    { name = "mypy", specifier = ">=2.0.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'" },
@@ -146,6 +150,14 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy" },
+    { name = "pytest", specifier = ">=7.0" },
+    { name = "ruff" },
+    { name = "types-pyyaml" },
+]
 
 [[package]]
 name = "cffi"
