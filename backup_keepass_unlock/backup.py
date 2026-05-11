@@ -118,7 +118,7 @@ def load_config_all_backups(config_path: str) -> ConfigAllBackups:
 
 def run_backup(
     name: str,
-    config: Path | ConfigBackup,
+    config: str | Path | ConfigBackup,
     database_path: Path,
     kp: KeePass | None = None,
     return_kp: bool = False,
@@ -127,7 +127,7 @@ def run_backup(
 
     Args:
         name: Name of the backup profile.
-        config: Backup configuration or path to YAML config file.
+        config: Backup configuration or path to YAML config file (str or Path).
         database_path: Path to the KeePass database file.
         kp: Optional KeePass instance. If not provided, creates a new one.
         return_kp: If True, returns the KeePass instance for use in other scripts.
@@ -135,7 +135,7 @@ def run_backup(
     Returns:
         KeePass instance if return_kp is True, otherwise None.
     """
-    if isinstance(config, Path):
+    if isinstance(config, str | Path):
         config = load_config_backup(str(config))
     logging.info(f"Starting backup '{name}'")
 
@@ -197,7 +197,7 @@ def run_backup(
 
 
 def run_backups(
-    config: Path | ConfigAllBackups,
+    config: str | Path | ConfigAllBackups,
     profile_name: str | None = None,
     kp: KeePass | None = None,
     return_kp: bool = False,
@@ -205,10 +205,10 @@ def run_backups(
     """Run backup profiles from a configuration.
 
     Args:
-        config: The loaded backup configuration or path to YAML config file.
+        config: The loaded backup configuration or path to YAML config file (str or Path).
         profile_name: Name of a specific profile to run. If None, all profiles are run.
     """
-    if isinstance(config, Path):
+    if isinstance(config, str | Path):
         config = load_config_all_backups(str(config))
     if profile_name is not None and profile_name not in config.profiles:
         raise ValueError(f"Profile '{profile_name}' not found")
