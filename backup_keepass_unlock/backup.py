@@ -5,16 +5,13 @@ Provides backup functionality using borg and KeePass for password management.
 
 import logging
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-from pydantic import BaseModel, Field
-
-
+import yaml  # type: ignore[import-untyped]
 from keepass_wrapper.keepass import KeePass  # type: ignore[import-untyped]
-
-
+from pydantic import BaseModel, Field
 
 
 class ConfigBackup(BaseModel):
@@ -28,12 +25,21 @@ class ConfigBackup(BaseModel):
         exclude: List of patterns to exclude from backup.
         must_exist: List of paths that must exist before backup.
     """
+
     type: str = Field(description="Type of backup (e.g., 'borg')")
     title: str = Field(description="KeePass entry name for the backup password")
     input: list[str] = Field(description="List of paths to backup")
     output: str = Field(description="Output path for the backup")
-    exclude: list[str] = Field(default_factory=list, description="Patterns to exclude from backup")
-    must_exist: list[str] = Field(default_factory=list, description="Paths that must exist before backup")
+    exclude: list[str] = Field(
+        default_factory=list, description="Patterns to exclude from backup"
+    )
+    must_exist: list[str] = Field(
+        default_factory=list, description="Paths that must exist before backup"
+    )
+    arguments: list[str] = Field(
+        default=["create", "--progress", "--json", "--filter=AME", "-C", "lz4"],
+        description="Borg command arguments",
+    )
 
     model_config = {"title": "Backup Config"}
 
@@ -45,8 +51,11 @@ class ConfigAllBackups(BaseModel):
         database_path: Path to the KeePass database file.
         profiles: Dictionary of profile names to their configurations.
     """
-    database_path: str = Field(description="Path to the KeePass database file")
-    profiles: dict[str, ConfigBackup] = Field(default_factory=dict, description="Backup profiles")
+
+    database_path: Path = Field(description="Path to the KeePass database file")
+    profiles: dict[str, ConfigBackup] = Field(
+        default_factory=dict, description="Backup profiles"
+    )
 
     model_config = {"title": "All Backups Config"}
 
@@ -66,19 +75,27 @@ class ConfigAllBackups(BaseModel):
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Backup profiles not found at {path}")
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid config format: expected a YAML mapping")
+        if "database_path" not in data:
+            raise ValueError("Invalid config format: missing 'database_path'")
+        profiles_data = data.get("profiles", {})
+        if not isinstance(profiles_data, dict):
+            raise ValueError("Invalid config format: 'profiles' must be a mapping")
         return cls(
-            database_path=data['database_path'],
-            profiles={k: ConfigBackup(**v) for k, v in data.get('profiles', {}).items()}
+            database_path=data["database_path"],
+            profiles={
+                k: ConfigBackup(**v) for k, v in profiles_data.items()
+            },
         )
-
 
 
 def run_backup(
     name: str,
     config: ConfigBackup,
-    database_path: str,
+    database_path: Path,
     kp: KeePass | None = None,
     return_kp: bool = False,
 ) -> KeePass | None:
@@ -102,7 +119,7 @@ def run_backup(
     else:
         logging.info(f"Using provided KeePass instance for backup '{name}'")
 
-    for path in [config.output] + config.must_exist:
+    for path in [config.output, *config.must_exist]:
         if not Path(path).exists():
             logging.error(f"Path {path} does not exist")
             raise FileNotFoundError(f"Path {path} does not exist")
@@ -110,12 +127,13 @@ def run_backup(
     if config.type == "borg":
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         archive_name = f"{name}_{timestamp}"
-        cmd = "borg create  --progress  --json --filter=AME -C lz4"
-        for e in config.exclude:
-            cmd += f' --exclude="{e}"'
-        cmd += f' "{config.output}"::{archive_name}'
-        for i in config.input:
-            cmd += f' "{i}"'
+        cmd = [
+            "borg",
+            *config.arguments,
+            *[f"--exclude={e}" for e in config.exclude],
+            f"{config.output}::{archive_name}",
+            *config.input,
+        ]
 
         logging.info(f"Running borg backup for '{name}'")
         logging.debug(f"Borg command: {cmd}")
@@ -131,22 +149,54 @@ def run_backup(
         if password is None:
             logging.error(f"Password not found for entry '{config.title}'")
             raise ValueError(f"Password not found for entry '{config.title}'")
-        os.environ['BORG_PASSPHRASE'] = password
+
+        env = os.environ.copy()
+        env["BORG_PASSPHRASE"] = password
         logging.info("Borg passphrase set from KeePass")
 
-        result = os.system(cmd)
-        os.environ["BORG_PASSPHRASE"] = ""
-
-        if result != 0:
-            logging.error(f"Borg backup failed with exit code {result}")
-        else:
-            logging.info(f"Borg backup completed successfully for '{name}'")
+        result = subprocess.run(cmd, env=env)
+        if result.returncode != 0:
+            logging.error(f"Borg backup failed with exit code {result.returncode}")
+            raise RuntimeError(f"Borg backup failed with exit code {result.returncode}")
+        logging.info(f"Borg backup completed successfully for '{name}'")
     else:
         logging.error(f"Unknown backup type: {config.type}")
         raise ValueError("Unknown backup type")
 
     logging.info(f"Backup '{name}' completed successfully")
 
+    if return_kp:
+        return kp
+    return None
+
+
+def run_backups(
+    config: ConfigAllBackups,
+    profile_name: str | None = None,
+    return_kp: bool = False,
+) -> KeePass | None:
+    """Run backup profiles from a configuration.
+
+    Args:
+        config: The loaded backup configuration.
+        profile_name: Name of a specific profile to run. If None, all profiles are run.
+    """
+    if profile_name is not None and profile_name not in config.profiles:
+        raise ValueError(f"Profile '{profile_name}' not found")
+    profiles = (
+        {profile_name: config.profiles[profile_name]}
+        if profile_name is not None
+        else config.profiles
+    )
+    kp = None
+    for name, profile_config in profiles.items():
+        kp = run_backup(
+            name,
+            profile_config,
+            database_path=config.database_path,
+            kp=kp,
+            return_kp=True,
+        )
     if return_kp:
         return kp
     return None

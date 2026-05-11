@@ -8,6 +8,7 @@ profiles:
     input:
       - tests/dir
     output: tests/borg
+    arguments: ["create", "--progress", "--json", "--filter=AME", "-C", "lz4"]
     exclude:
       - tests/dir/excludeme
     must_exist:
@@ -18,6 +19,7 @@ profiles:
     input:
       - tests/dir
     output: tests/borg
+    arguments: ["create", "--progress", "--json", "--filter=AME", "-C", "lz4"]
     exclude: []
     must_exist:
       - tests/dir/README.md
