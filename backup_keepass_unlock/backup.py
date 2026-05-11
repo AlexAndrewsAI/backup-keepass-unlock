@@ -134,7 +134,8 @@ def run_backup(
         KeePass instance if return_kp is True, otherwise None.
     """
     if isinstance(config, str | Path):
-        config = load_config_backup(str(config))
+        config =: ConfigBackup(**v) for k, v in profiles_data.items()},
+ load_config_backup(str(config))
     logging.info(f"Starting backup '{name}'")
 
     if kp is None:
@@ -178,13 +179,10 @@ def run_backup(
         env["BORG_PASSPHRASE"] = password
         logging.info("Borg passphrase set from KeePass")
 
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        result = subprocess.run(cmd, env=env, text=True)
         if result.returncode != 0:
             logging.error(f"Borg backup failed with exit code {result.returncode}")
-            err_msg = f"Borg backup failed with exit code {result.returncode}"
-            if result.stderr:
-                err_msg += f": {result.stderr.strip()}"
-            raise RuntimeError(err_msg)
+            raise RuntimeError(f"Borg backup failed with exit code {result.returncode}")
         logging.info(f"Borg backup completed successfully for '{name}'")
     else:
         logging.error(f"Unknown backup type: {config.type}")
