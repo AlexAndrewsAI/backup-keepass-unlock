@@ -13,6 +13,8 @@ from typer.testing import CliRunner
 from backup_keepass_unlock.backup import (
     ConfigAllBackups,
     ConfigBackup,
+    load_config_all_backups,
+    load_config_backup,
     run_backup,
     run_backups,
 )
@@ -93,26 +95,26 @@ class TestConfigAllBackups:
         }
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(data))
-        cfg = ConfigAllBackups.load(str(path))
+        cfg = load_config_all_backups(str(path))
         assert cfg.database_path == Path("/tmp/test.kdbx")
         assert "p1" in cfg.profiles
         assert cfg.profiles["p1"].title == "t1"
 
     def test_load_missing_file(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
-            ConfigAllBackups.load(str(tmp_path / "missing.yml"))
+            load_config_all_backups(str(tmp_path / "missing.yml"))
 
     def test_load_invalid_yaml_shape(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(["not", "a", "mapping"]))
         with pytest.raises(ValueError, match="expected a YAML mapping"):
-            ConfigAllBackups.load(str(path))
+            load_config_all_backups(str(path))
 
     def test_load_missing_database_path(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump({"profiles": {}}))
         with pytest.raises(ValueError, match="missing 'database_path'"):
-            ConfigAllBackups.load(str(path))
+            load_config_all_backups(str(path))
 
     def test_load_invalid_profiles_shape(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
@@ -122,7 +124,7 @@ class TestConfigAllBackups:
             )
         )
         with pytest.raises(ValueError, match="'profiles' must be a mapping"):
-            ConfigAllBackups.load(str(path))
+            load_config_all_backups(str(path))
 
 
 class TestRunBackup:
@@ -309,6 +311,55 @@ class TestRunBackup:
         assert env.get("BORG_PASSPHRASE") == "secret-password"
         assert os.environ.get("BORG_PASSPHRASE") is None
 
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_config_from_path(
+        self,
+        mock_subprocess: MagicMock,
+        mock_keepass: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0)
+        out_dir = tmp_path / "borg"
+        out_dir.mkdir()
+        in_dir = tmp_path / "input"
+        in_dir.mkdir()
+        must_exist = tmp_path / "must_exist"
+        must_exist.write_text("exists")
+
+        data = {
+            "type": "borg",
+            "title": "borg",
+            "input": [str(in_dir)],
+            "output": str(out_dir),
+            "exclude": [],
+            "must_exist": [str(must_exist)],
+        }
+        config_path = tmp_path / "config.yml"
+        config_path.write_text(yaml.safe_dump(data))
+
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            run_backup("test", config_path, database_path=tmp_path / "test.kdbx")
+        mock_subprocess.assert_called_once()
+
+    def test_load_config_backup(self, tmp_path: Path) -> None:
+        data = {
+            "type": "borg",
+            "title": "test",
+            "input": ["/in"],
+            "output": "/out",
+            "exclude": ["*.tmp"],
+            "must_exist": ["/in"],
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        cfg = load_config_backup(str(path))
+        assert cfg.type == "borg"
+        assert cfg.title == "test"
+        assert cfg.input == ["/in"]
+        assert cfg.output == "/out"
+        assert cfg.exclude == ["*.tmp"]
+        assert cfg.must_exist == ["/in"]
+
 
 class TestRunBackups:
     """Tests for run_backups function."""
@@ -381,6 +432,32 @@ class TestRunBackups:
         )
         with pytest.raises(ValueError, match="Profile 'missing' not found"):
             run_backups(cfg, profile_name="missing")
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_config_from_path(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0)
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        config_path = tmp_path / "config.yml"
+        config_path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            run_backups(config_path)
+        assert mock_subprocess.call_count == 1
 
 
 class TestCli:

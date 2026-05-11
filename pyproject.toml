@@ -1,6 +1,6 @@
 [project]
 name = "backup-keepass-unlock"
-version = "0.1.0"
+version = "0.1.5"
 description = "Backup tool using borg and KeePass for password management"
 readme = "README.md"
 requires-python = ">=3.10"
