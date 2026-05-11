@@ -110,9 +110,7 @@ def load_config_all_backups(config_path: str) -> ConfigAllBackups:
         raise ValueError("Invalid config format: 'profiles' must be a mapping")
     return ConfigAllBackups(
         database_path=data["database_path"],
-        profiles={
-            k: ConfigBackup(**v) for k, v in profiles_data.items()
-        },
+        profiles={k: ConfigBackup(**v) for k, v in profiles_data.items()},
     )
 
 
@@ -145,7 +143,7 @@ def run_backup(
     else:
         logging.info(f"Using provided KeePass instance for backup '{name}'")
 
-    for path in [config.output, *config.must_exist]:
+    for path in [config.output, *config.input, *config.must_exist]:
         if not Path(path).exists():
             logging.error(f"Path {path} does not exist")
             raise FileNotFoundError(f"Path {path} does not exist")
@@ -180,10 +178,13 @@ def run_backup(
         env["BORG_PASSPHRASE"] = password
         logging.info("Borg passphrase set from KeePass")
 
-        result = subprocess.run(cmd, env=env)
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
         if result.returncode != 0:
             logging.error(f"Borg backup failed with exit code {result.returncode}")
-            raise RuntimeError(f"Borg backup failed with exit code {result.returncode}")
+            err_msg = f"Borg backup failed with exit code {result.returncode}"
+            if result.stderr:
+                err_msg += f": {result.stderr.strip()}"
+            raise RuntimeError(err_msg)
         logging.info(f"Borg backup completed successfully for '{name}'")
     else:
         logging.error(f"Unknown backup type: {config.type}")
@@ -207,6 +208,11 @@ def run_backups(
     Args:
         config: The loaded backup configuration or path to YAML config (str or Path).
         profile_name: Name of a specific profile to run. If None, all profiles are run.
+        kp: Optional KeePass instance. If not provided, creates a new one.
+        return_kp: If True, returns the KeePass instance for use in other scripts.
+
+    Returns:
+        KeePass instance if return_kp is True, otherwise None.
     """
     if isinstance(config, str | Path):
         config = load_config_all_backups(str(config))

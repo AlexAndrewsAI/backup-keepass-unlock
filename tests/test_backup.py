@@ -208,9 +208,7 @@ class TestRunBackup:
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
             pytest.raises(ValueError, match="KeePass entry 'borg' not found"),
         ):
-            run_backup(
-                "test", borg_config, database_path=tmp_path / "test.kdbx"
-            )
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
     def test_missing_password(
@@ -228,9 +226,7 @@ class TestRunBackup:
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
             pytest.raises(ValueError, match="Password not found for entry 'borg'"),
         ):
-            run_backup(
-                "test", borg_config, database_path=tmp_path / "test.kdbx"
-            )
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.KeePass")
     def test_missing_output_path(
@@ -249,13 +245,13 @@ class TestRunBackup:
             run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.KeePass")
-    def test_unknown_backup_type(
-        self, _mock_kp: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_unknown_backup_type(self, _mock_kp: MagicMock, tmp_path: Path) -> None:
+        inp = tmp_path / "input"
+        inp.mkdir()
         cfg = ConfigBackup(
             type="rsync",
             title="test",
-            input=["/in"],
+            input=[str(inp)],
             output=str(tmp_path / "out"),
         )
         (tmp_path / "out").mkdir()
@@ -275,9 +271,7 @@ class TestRunBackup:
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
             pytest.raises(RuntimeError, match="Borg backup failed"),
         ):
-            run_backup(
-                "test", borg_config, database_path=tmp_path / "test.kdbx"
-            )
+            run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
     def test_excludes_in_command(
@@ -340,6 +334,10 @@ class TestRunBackup:
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backup("test", config_path, database_path=tmp_path / "test.kdbx")
         mock_subprocess.assert_called_once()
+
+    def test_load_config_backup_missing_file(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_config_backup(str(tmp_path / "missing.yml"))
 
     def test_load_config_backup(self, tmp_path: Path) -> None:
         data = {

@@ -27,14 +27,6 @@ dependencies = [
     "keepass-wrapper @ git+https://github.com/AlexAndrewsAI/keepass-wrapper.git",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "ruff",
-    "mypy",
-    "types-PyYAML",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=7.0",
