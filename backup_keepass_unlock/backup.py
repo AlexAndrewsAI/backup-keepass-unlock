@@ -173,6 +173,7 @@ def run_backup(
 def run_backups(
     config: ConfigAllBackups,
     profile_name: str | None = None,
+    kp: KeePass | None = None,
     return_kp: bool = False,
 ) -> KeePass | None:
     """Run backup profiles from a configuration.
@@ -188,7 +189,8 @@ def run_backups(
         if profile_name is not None
         else config.profiles
     )
-    kp = None
+    if kp is None:
+        kp = None
     for name, profile_config in profiles.items():
         kp = run_backup(
             name,
