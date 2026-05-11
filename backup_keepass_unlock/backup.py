@@ -205,7 +205,7 @@ def run_backups(
     """Run backup profiles from a configuration.
 
     Args:
-        config: The loaded backup configuration or path to YAML config file (str or Path).
+        config: The loaded backup configuration or path to YAML config (str or Path).
         profile_name: Name of a specific profile to run. If None, all profiles are run.
     """
     if isinstance(config, str | Path):
