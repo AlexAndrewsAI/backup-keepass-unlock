@@ -59,42 +59,63 @@ class ConfigAllBackups(BaseModel):
 
     model_config = {"title": "All Backups Config"}
 
-    @classmethod
-    def load(cls, config_path: str) -> "ConfigAllBackups":
-        """Load backup profiles from a YAML file.
 
-        Args:
-            config_path: Path to the YAML configuration file.
+def load_config_backup(config_path: str) -> ConfigBackup:
+    """Load a single backup profile from a YAML file.
 
-        Returns:
-            ConfigAllBackups instance with loaded profiles.
+    Args:
+        config_path: Path to the YAML configuration file.
 
-        Raises:
-            FileNotFoundError: If the configuration file is not found.
-        """
-        path = Path(config_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Backup profiles not found at {path}")
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        if not isinstance(data, dict):
-            raise ValueError("Invalid config format: expected a YAML mapping")
-        if "database_path" not in data:
-            raise ValueError("Invalid config format: missing 'database_path'")
-        profiles_data = data.get("profiles", {})
-        if not isinstance(profiles_data, dict):
-            raise ValueError("Invalid config format: 'profiles' must be a mapping")
-        return cls(
-            database_path=data["database_path"],
-            profiles={
-                k: ConfigBackup(**v) for k, v in profiles_data.items()
-            },
-        )
+    Returns:
+        ConfigBackup instance with loaded configuration.
 
+    Raises:
+        FileNotFoundError: If the configuration file is not found.
+        ValueError: If the configuration file has invalid format.
+    """
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Backup config not found at {path}")
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid config format: expected a YAML mapping")
+    return ConfigBackup(**data)
+
+
+def load_config_all_backups(config_path: str) -> ConfigAllBackups:
+    """Load backup profiles from a YAML file.
+
+    Args:
+        config_path: Path to the YAML configuration file.
+
+    Returns:
+        ConfigAllBackups instance with loaded profiles.
+
+    Raises:
+        FileNotFoundError: If the configuration file is not found.
+        ValueError: If the configuration file has invalid format.
+    """
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Backup profiles not found at {path}")
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid config format: expected a YAML mapping")
+    if "database_path" not in data:
+        raise ValueError("Invalid config format: missing 'database_path'")
+    profiles_data = data.get("profiles", {})
+    if not isinstance(profiles_data, dict):
+        raise ValueError("Invalid config format: 'profiles' must be a mapping")
+    return ConfigAllBackups(
+        database_path=data["database_path"],
+        profiles={k: ConfigBackup(**v) for k, v in profiles_data.items()},
+    )
 
 def run_backup(
     name: str,
-    config: ConfigBackup,
+    config: str | Path | ConfigBackup,
     database_path: Path,
     kp: KeePass | None = None,
     return_kp: bool = False,
@@ -103,7 +124,7 @@ def run_backup(
 
     Args:
         name: Name of the backup profile.
-        config: Backup configuration.
+        config: Backup configuration or path to YAML config file (str or Path).
         database_path: Path to the KeePass database file.
         kp: Optional KeePass instance. If not provided, creates a new one.
         return_kp: If True, returns the KeePass instance for use in other scripts.
@@ -111,6 +132,8 @@ def run_backup(
     Returns:
         KeePass instance if return_kp is True, otherwise None.
     """
+    if isinstance(config, str | Path):
+        config = load_config_backup(str(config))
     logging.info(f"Starting backup '{name}'")
 
     if kp is None:
@@ -119,7 +142,7 @@ def run_backup(
     else:
         logging.info(f"Using provided KeePass instance for backup '{name}'")
 
-    for path in [config.output, *config.must_exist]:
+    for path in [config.output, *config.input, *config.must_exist]:
         if not Path(path).exists():
             logging.error(f"Path {path} does not exist")
             raise FileNotFoundError(f"Path {path} does not exist")
@@ -154,7 +177,7 @@ def run_backup(
         env["BORG_PASSPHRASE"] = password
         logging.info("Borg passphrase set from KeePass")
 
-        result = subprocess.run(cmd, env=env)
+        result = subprocess.run(cmd, env=env, text=True)
         if result.returncode != 0:
             logging.error(f"Borg backup failed with exit code {result.returncode}")
             raise RuntimeError(f"Borg backup failed with exit code {result.returncode}")
@@ -171,16 +194,24 @@ def run_backup(
 
 
 def run_backups(
-    config: ConfigAllBackups,
+    config: str | Path | ConfigAllBackups,
     profile_name: str | None = None,
+    kp: KeePass | None = None,
     return_kp: bool = False,
 ) -> KeePass | None:
     """Run backup profiles from a configuration.
 
     Args:
-        config: The loaded backup configuration.
+        config: The loaded backup configuration or path to YAML config (str or Path).
         profile_name: Name of a specific profile to run. If None, all profiles are run.
+        kp: Optional KeePass instance. If not provided, creates a new one.
+        return_kp: If True, returns the KeePass instance for use in other scripts.
+
+    Returns:
+        KeePass instance if return_kp is True, otherwise None.
     """
+    if isinstance(config, str | Path):
+        config = load_config_all_backups(str(config))
     if profile_name is not None and profile_name not in config.profiles:
         raise ValueError(f"Profile '{profile_name}' not found")
     profiles = (
@@ -188,7 +219,6 @@ def run_backups(
         if profile_name is not None
         else config.profiles
     )
-    kp = None
     for name, profile_config in profiles.items():
         kp = run_backup(
             name,
