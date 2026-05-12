@@ -113,7 +113,6 @@ def load_config_all_backups(config_path: str) -> ConfigAllBackups:
         profiles={k: ConfigBackup(**v) for k, v in profiles_data.items()},
     )
 
-
 def run_backup(
     name: str,
     config: str | Path | ConfigBackup,

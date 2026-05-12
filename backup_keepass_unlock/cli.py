@@ -3,6 +3,8 @@
 Provides a typer-based CLI for the package.
 """
 
+import logging
+
 import typer
 
 from backup_keepass_unlock.backup import (
