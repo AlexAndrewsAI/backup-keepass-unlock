@@ -134,8 +134,7 @@ def run_backup(
         KeePass instance if return_kp is True, otherwise None.
     """
     if isinstance(config, str | Path):
-        config =: ConfigBackup(**v) for k, v in profiles_data.items()},
- load_config_backup(str(config))
+        config = load_config_backup(str(config))
     logging.info(f"Starting backup '{name}'")
 
     if kp is None:
