@@ -40,6 +40,9 @@ class ConfigBackup(BaseModel):
         default=["create", "--progress", "--json", "--filter=AME", "-C", "lz4"],
         description="Borg command arguments",
     )
+    last_run_file: str = Field(
+        default="last_run.dat", description="Filename to store last run timestamp"
+    )
 
     model_config = {"title": "Backup Config"}
 
@@ -112,6 +115,7 @@ def load_config_all_backups(config_path: str) -> ConfigAllBackups:
         database_path=data["database_path"],
         profiles={k: ConfigBackup(**v) for k, v in profiles_data.items()},
     )
+
 
 def run_backup(
     name: str,
@@ -187,6 +191,12 @@ def run_backup(
         raise ValueError("Unknown backup type")
 
     logging.info(f"Backup '{name}' completed successfully")
+
+    # Write current date to last_run_file in output folder
+    last_run_path = Path(config.output) / config.last_run_file
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    last_run_path.write_text(current_date)
+    logging.info(f"Updated {config.last_run_file} with: {current_date}")
 
     if return_kp:
         return kp
