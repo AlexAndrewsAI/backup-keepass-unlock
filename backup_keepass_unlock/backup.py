@@ -43,6 +43,9 @@ class ConfigBackup(BaseModel):
     last_run_file: str = Field(
         default="last_run.dat", description="Filename to store last run timestamp"
     )
+    skip_recent: int | None = Field(
+        default=None, description="Skip backup if less than this many seconds since last run"
+    )
 
     model_config = {"title": "Backup Config"}
 
@@ -84,6 +87,29 @@ def load_config_backup(config_path: str) -> ConfigBackup:
     if not isinstance(data, dict):
         raise ValueError("Invalid config format: expected a YAML mapping")
     return ConfigBackup(**data)
+
+
+def time_since_last_run(config: ConfigBackup) -> float | None:
+    """Calculate the time in seconds since the last backup run.
+
+    Args:
+        config: Backup configuration containing output path and last_run_file.
+
+    Returns:
+        Number of seconds since the last run, or None if the last_run_file
+        does not exist.
+    """
+    last_run_path = Path(config.output) / config.last_run_file
+    if not last_run_path.exists():
+        return None
+
+    try:
+        last_run_str = last_run_path.read_text().strip()
+        last_run = datetime.strptime(last_run_str, "%Y-%m-%d %H:%M:%S")
+        return (datetime.now() - last_run).total_seconds()
+    except (ValueError, OSError) as e:
+        logging.warning(f"Failed to parse last_run file: {e}")
+        return None
 
 
 def load_config_all_backups(config_path: str) -> ConfigAllBackups:
@@ -139,6 +165,20 @@ def run_backup(
     if isinstance(config, str | Path):
         config = load_config_backup(str(config))
     logging.info(f"Starting backup '{name}'")
+
+    seconds_since_last = time_since_last_run(config)
+    if seconds_since_last is not None:
+        logging.info(f"Time since last backup: {seconds_since_last:.1f} seconds")
+        if config.skip_recent is not None and seconds_since_last < config.skip_recent:
+            logging.info(
+                f"Skipping backup '{name}' - only {seconds_since_last:.1f} seconds since last run "
+                f"(skip_recent threshold: {config.skip_recent} seconds)"
+            )
+            if return_kp:
+                return kp
+            return None
+    else:
+        logging.info("No previous backup run found")
 
     if kp is None:
         kp = KeePass(database_path=str(database_path))
