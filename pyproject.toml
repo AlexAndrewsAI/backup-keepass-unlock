@@ -45,6 +45,10 @@ Documentation = "https://github.com/AlexAndrewsAI/backup-keepass-unlock#readme"
 
 [tool.uv]
 
+[tool.setuptools.packages.find]
+include = ["backup_keepass_unlock*"]
+exclude = ["output*", "tests*"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"

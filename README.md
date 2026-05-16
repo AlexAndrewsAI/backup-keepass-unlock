@@ -37,11 +37,17 @@ The package includes a CLI tool built with **typer**:
 
 ```bash
 # Run all profiles in a config file
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml
 
 # Run a specific backup profile
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test2
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --profile test2
+
+# Run backups but skip if they were run in the last hour (3600 seconds)
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --ignore-recent 3600
 ```
+
+#### Skipping Frequent Backups
+The `--ignore-recent` flag (given in seconds) allows you to skip backups that were recently completed. This is useful for automated tasks (like crontabs) to prevent redundant backups if the script runs too frequently.
 
 ## Development
 
@@ -77,7 +83,7 @@ uv run pytest -v
 uv run pytest -s
 
 # Manually run a single test backup profile
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test-backup
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --profile test-backup
 ```
 
 ### Code Quality
@@ -130,6 +136,10 @@ backup-keepass-unlock/
 - ✅ **Linting**: Code quality checks with ruff
 - ✅ **Dependency management**: Explicit dependencies in pyproject.toml
 - ✅ **Python versions**: Supports Python 3.10+
+
+## Disclaimer
+
+This software is intended for personal use and is provided "as is", without any warranty of any kind, express or implied. While efforts have been made to ensure security, there is no guarantee that this software is free of security vulnerabilities. Use it at your own risk.
 
 ## License
 

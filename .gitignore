@@ -1,6 +1,8 @@
 AGENTS.md
+GEMINI.md
 # Test files
 tests/borg/
+last_run.dat
 
 
 # Python
