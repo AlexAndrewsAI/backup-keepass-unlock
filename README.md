@@ -137,6 +137,10 @@ backup-keepass-unlock/
 - ✅ **Dependency management**: Explicit dependencies in pyproject.toml
 - ✅ **Python versions**: Supports Python 3.10+
 
+## Disclaimer
+
+This software is intended for personal use and is provided "as is", without any warranty of any kind, express or implied. While efforts have been made to ensure security, there is no guarantee that this software is free of security vulnerabilities. Use it at your own risk.
+
 ## License
 
 MIT
