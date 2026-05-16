@@ -415,6 +415,8 @@ def get_stale_profiles(
 
     stale_profiles = []
     for name, profile_config in config.profiles.items():
+        if not Path(profile_config.output).exists():
+            raise FileNotFoundError(f"Output path {profile_config.output} does not exist for profile '{name}'")
         last_run_file = str(Path(profile_config.output) / "last_run.dat")
         if profile_config.last_run_file:
             last_run_file = profile_config.last_run_file
