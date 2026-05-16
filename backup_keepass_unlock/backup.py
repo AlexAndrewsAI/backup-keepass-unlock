@@ -16,6 +16,8 @@ from keepass_wrapper.keepass import KeePass  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
 
+
+
 @contextmanager
 def managed_keepass(database_path: str) -> Generator[KeePass, None, None]:
     """Context manager for KeePass instances."""
@@ -393,3 +395,38 @@ def run_backups(
     if return_kp:
         return kp
     return None
+
+
+def get_stale_profiles(
+    config: str | Path | ConfigAllBackups, cutoff_seconds: int = 86400
+) -> list[str]:
+    """Get profiles that haven't been run within the specified time cutoff.
+
+    Args:
+        config: The loaded backup configuration or path to YAML config (str or Path).
+        cutoff_seconds: Maximum number of seconds since last run. Profiles that haven't
+            been run within this time (or have never been run) will be returned.
+
+    Returns:
+        List of profile names that are stale (haven't been run within cutoff_seconds).
+    """
+    if isinstance(config, str | Path):
+        config = load_config_all_backups(str(config))
+
+    stale_profiles = []
+    for name, profile_config in config.profiles.items():
+        last_run_file = str(Path(profile_config.output) / "last_run.dat")
+        if profile_config.last_run_file:
+            last_run_file = profile_config.last_run_file
+
+        last_run_timestamp = read_last_run_timestamp(last_run_file)
+        if last_run_timestamp is None:
+            # No last run record - consider it stale
+            stale_profiles.append(name)
+            continue
+
+        seconds_since = (datetime.now() - last_run_timestamp).total_seconds()
+        if seconds_since > cutoff_seconds:
+            stale_profiles.append(name)
+
+    return stale_profiles

@@ -5,14 +5,16 @@ Provides a typer-based CLI for the package.
 
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 
 import typer
-from keepass_wrapper.keepass import KeePass  # type: ignore[import-untyped]
 
 from backup_keepass_unlock.backup import (
+    get_stale_profiles,
     load_config_all_backups,
+    read_last_run_timestamp,
     run_backups,
-    time_since_last_run,
 )
 
 # Configure logging to show INFO level messages
@@ -91,36 +93,20 @@ def last_cmd(
             else config.profiles
         )
 
-        kp: KeePass | None = None
         for name, profile_config in profiles.items():
-            if kp is None:
-                kp = KeePass(database_path=str(config.database_path))
+            # Determine last_run_file path (same logic as in run_backup)
+            last_run_file = str(Path(profile_config.output) / "last_run.dat")
+            if profile_config.type == "borg" and profile_config.last_run_file:
+                last_run_file = profile_config.last_run_file
 
-            entries = kp.find_entries(title=profile_config.title, exact=True)
-            if not entries:
-                typer.echo(
-                    f"Error: KeePass entry '{profile_config.title}' not found", err=True
-                )
-                raise typer.Exit(code=1)
-
-            password = entries[0].get_password()
-            if password is None:
-                typer.echo(
-                    f"Error: Password not found for entry '{profile_config.title}'",
-                    err=True,
-                )
-                raise typer.Exit(code=1)
-
-            env = os.environ.copy()
-            env["BORG_PASSPHRASE"] = password
-
-            seconds_since = time_since_last_run(profile_config.output, env=env)
-            if seconds_since is not None:
+            last_run_timestamp = read_last_run_timestamp(last_run_file)
+            if last_run_timestamp is not None:
+                seconds_since = (datetime.now() - last_run_timestamp).total_seconds()
                 typer.echo(f"=== {name} ===")
                 typer.echo(f"Time since last backup: {seconds_since:.1f} seconds")
             else:
                 typer.echo(f"=== {name} ===")
-                typer.echo("Time since last backup: No archives found")
+                typer.echo("Time since last backup: No previous run found")
             typer.echo("")
 
     except FileNotFoundError as e:
@@ -128,6 +114,41 @@ def last_cmd(
         raise typer.Exit(code=1)
     except (OSError, ValueError, RuntimeError) as e:
         typer.echo(f"Error getting last run: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command(name="stale")
+def stale_cmd(
+    config_path: str = typer.Argument(..., help="Path to backup profiles YAML file"),
+    cutoff_seconds: int = typer.Option(
+        86400,
+        "--cutoff",
+        "-c",
+        help="Cutoff in seconds (default: 86400 = 24 hours)",
+    ),
+) -> None:
+    """Show profiles that haven't been run within the specified time cutoff.
+
+    Args:
+        config_path: Path to the backup profiles configuration file.
+        cutoff_seconds: Maximum number of seconds since last run.
+    """
+    try:
+        config = load_config_all_backups(config_path)
+        stale = get_stale_profiles(config, cutoff_seconds)
+
+        if stale:
+            typer.echo(f"Stale profiles (not run in {cutoff_seconds} seconds):")
+            for profile in stale:
+                typer.echo(f"  - {profile}")
+        else:
+            typer.echo(f"No stale profiles (all run within {cutoff_seconds} seconds)")
+
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (OSError, ValueError, RuntimeError) as e:
+        typer.echo(f"Error checking stale profiles: {e}", err=True)
         raise typer.Exit(code=1)
 
 
