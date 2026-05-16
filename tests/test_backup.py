@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,10 +14,12 @@ from typer.testing import CliRunner
 from backup_keepass_unlock.backup import (
     ConfigAllBackups,
     ConfigBackup,
+    list_archives,
     load_config_all_backups,
     load_config_backup,
     run_backup,
     run_backups,
+    time_since_last_run,
 )
 from backup_keepass_unlock.cli import app
 
@@ -127,6 +130,122 @@ class TestConfigAllBackups:
             load_config_all_backups(str(path))
 
 
+class TestListArchives:
+    """Tests for list_archives function."""
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_returns_stdout(self, mock_subprocess: MagicMock) -> None:
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="archive1  2024-01-01  1.23 GB\n"
+        )
+        result = list_archives("/repo")
+        assert "archive1" in result
+        mock_subprocess.assert_called_once_with(
+            ["borg", "list", "/repo"], env=None, capture_output=True, text=True
+        )
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_empty_repo(self, mock_subprocess: MagicMock) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        result = list_archives("/repo")
+        assert result == ""
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_passes_env(self, mock_subprocess: MagicMock) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        env = {"BORG_PASSPHRASE": "secret"}
+        list_archives("/repo", env=env)
+        assert mock_subprocess.call_args[1]["env"] == env
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_raises_on_failure(self, mock_subprocess: MagicMock) -> None:
+        mock_subprocess.return_value = MagicMock(
+            returncode=2, stderr="Repository not found", stdout=""
+        )
+        with pytest.raises(RuntimeError, match="borg list failed"):
+            list_archives("/repo")
+
+
+class TestTimeSinceLastRun:
+    """Tests for time_since_last_run function."""
+
+    @patch("backup_keepass_unlock.backup.datetime")
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_returns_seconds(
+        self, mock_subprocess: MagicMock, mock_datetime: MagicMock
+    ) -> None:
+        # Mock datetime.now() to return a fixed time
+        fixed_now = datetime(2024, 1, 1, 12, 0, 0)
+        mock_datetime.now.return_value = fixed_now
+        mock_datetime.strptime = datetime.strptime
+
+        # Mock borg list to return a timestamp from 1 hour ago
+        timestamp_str = "2024-01-01_11-00-00"
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=timestamp_str)
+        result = time_since_last_run("/repo")
+        assert result is not None
+        # Should be exactly 3600 seconds (1 hour)
+        assert result == 3600
+        mock_subprocess.assert_called_once_with(
+            [
+                "borg",
+                "list",
+                "--last",
+                "1",
+                "/repo",
+                "--format",
+                "{time:%Y-%m-%d_%H-%M-%S}",
+            ],
+            env=None,
+            capture_output=True,
+            text=True,
+        )
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_no_archives_returns_none(self, mock_subprocess: MagicMock) -> None:
+        # Mock borg list to return empty output (no archives)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        result = time_since_last_run("/repo")
+        assert result is None
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_borg_failure_returns_none(self, mock_subprocess: MagicMock) -> None:
+        # Mock borg list to fail
+        mock_subprocess.return_value = MagicMock(
+            returncode=2, stderr="Repository not found", stdout=""
+        )
+        result = time_since_last_run("/repo")
+        assert result is None
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_passes_env(self, mock_subprocess: MagicMock) -> None:
+        timestamp = "2024-01-01_00-00-00"
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=timestamp)
+        env = {"BORG_PASSPHRASE": "secret"}
+        result = time_since_last_run("/repo", env=env)
+        assert result is not None
+        assert mock_subprocess.call_args[1]["env"] == env
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_invalid_timestamp_returns_none(self, mock_subprocess: MagicMock) -> None:
+        # Mock borg list to return invalid timestamp format
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="invalid")
+        result = time_since_last_run("/repo")
+        assert result is None
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_writes_timestamp_to_file(
+        self, mock_subprocess: MagicMock, tmp_path: Path
+    ) -> None:
+        timestamp = "2024-01-01_00-00-00"
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=timestamp)
+        last_run_file = tmp_path / "output" / "last_run.dat"
+        result = time_since_last_run("/repo", last_run_file=str(last_run_file))
+        assert result is not None
+        assert last_run_file.exists()
+        assert last_run_file.read_text() == timestamp
+
+
 class TestRunBackup:
     """Tests for run_backup function."""
 
@@ -138,17 +257,19 @@ class TestRunBackup:
         borg_config: ConfigBackup,
         tmp_path: Path,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        # First call: borg create, second call: borg list (to write timestamp)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             result = run_backup(
                 "test", borg_config, database_path=tmp_path / "test.kdbx"
             )
         assert result is None
-        mock_subprocess.assert_called_once()
-        call_cmd = mock_subprocess.call_args[0][0]
-        assert "borg" in call_cmd
-        assert "create" in call_cmd
-        archive_args = [a for a in call_cmd if "::" in a]
+        # subprocess called twice: borg create + borg list
+        assert mock_subprocess.call_count == 2
+        create_cmd = mock_subprocess.call_args_list[0][0][0]
+        assert "borg" in create_cmd
+        assert "create" in create_cmd
+        archive_args = [a for a in create_cmd if "::" in a]
         assert len(archive_args) == 1
         assert "test_" in archive_args[0]
 
@@ -160,7 +281,7 @@ class TestRunBackup:
         borg_config: ConfigBackup,
         tmp_path: Path,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             kp = run_backup(
                 "test",
@@ -178,7 +299,7 @@ class TestRunBackup:
         borg_config: ConfigBackup,
         tmp_path: Path,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         existing_kp = MagicMock()
         existing_entry = MagicMock()
         existing_entry.get_password.return_value = "existing-password"
@@ -203,7 +324,7 @@ class TestRunBackup:
         tmp_path: Path,
     ) -> None:
         mock_keepass.return_value.find_entries.return_value = []
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with (
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
             pytest.raises(ValueError, match="KeePass entry 'borg' not found"),
@@ -221,7 +342,7 @@ class TestRunBackup:
         mock_entry = MagicMock()
         mock_entry.get_password.return_value = None
         mock_keepass.return_value.find_entries.return_value = [mock_entry]
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with (
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
             pytest.raises(ValueError, match="Password not found for entry 'borg'"),
@@ -266,6 +387,7 @@ class TestRunBackup:
         borg_config: ConfigBackup,
         tmp_path: Path,
     ) -> None:
+        # borg create fails (no borg list call since backup fails)
         mock_subprocess.return_value = MagicMock(returncode=1)
         with (
             patch("backup_keepass_unlock.backup.KeePass", mock_keepass),
@@ -282,12 +404,12 @@ class TestRunBackup:
         tmp_path: Path,
     ) -> None:
         borg_config.exclude = ["*.tmp", "*.log"]
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
-        cmd = mock_subprocess.call_args[0][0]
-        assert "--exclude=*.tmp" in cmd
-        assert "--exclude=*.log" in cmd
+        create_cmd = mock_subprocess.call_args_list[0][0][0]
+        assert "--exclude=*.tmp" in create_cmd
+        assert "--exclude=*.log" in create_cmd
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
     def test_borg_passphrase_env(
@@ -297,12 +419,14 @@ class TestRunBackup:
         borg_config: ConfigBackup,
         tmp_path: Path,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backup("test", borg_config, database_path=tmp_path / "test.kdbx")
-        env = mock_subprocess.call_args[1].get("env")
-        assert env is not None
-        assert env.get("BORG_PASSPHRASE") == "secret-password"
+        # Both borg list and borg create should receive the passphrase env
+        for call in mock_subprocess.call_args_list:
+            env = call[1].get("env")
+            assert env is not None
+            assert env.get("BORG_PASSPHRASE") == "secret-password"
         assert os.environ.get("BORG_PASSPHRASE") is None
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
@@ -312,7 +436,7 @@ class TestRunBackup:
         mock_keepass: MagicMock,
         tmp_path: Path,
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out_dir = tmp_path / "borg"
         out_dir.mkdir()
         in_dir = tmp_path / "input"
@@ -333,7 +457,56 @@ class TestRunBackup:
 
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backup("test", config_path, database_path=tmp_path / "test.kdbx")
-        mock_subprocess.assert_called_once()
+        # borg create + borg list
+        assert mock_subprocess.call_count == 2
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_ignore_recent_skips_when_recent(
+        self,
+        mock_subprocess: MagicMock,
+        mock_keepass: MagicMock,
+        borg_config: ConfigBackup,
+        tmp_path: Path,
+    ) -> None:
+        # Create the last_run.dat file with a recent timestamp
+        last_run_file = tmp_path / "borg" / "last_run.dat"
+        last_run_file.parent.mkdir(parents=True, exist_ok=True)
+        last_run_file.write_text("2099-01-01_00-00-00")
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            result = run_backup(
+                "test",
+                borg_config,
+                database_path=tmp_path / "test.kdbx",
+                ignore_recent=999999999,
+            )
+        assert result is None
+        # No subprocess calls — backup skipped due to ignore_recent
+        assert mock_subprocess.call_count == 0
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_ignore_recent_runs_when_old(
+        self,
+        mock_subprocess: MagicMock,
+        mock_keepass: MagicMock,
+        borg_config: ConfigBackup,
+        tmp_path: Path,
+    ) -> None:
+        # Create the last_run.dat file with an old timestamp
+        last_run_file = tmp_path / "borg" / "last_run.dat"
+        last_run_file.parent.mkdir(parents=True, exist_ok=True)
+        last_run_file.write_text("2000-01-01_00-00-00")
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            result = run_backup(
+                "test",
+                borg_config,
+                database_path=tmp_path / "test.kdbx",
+                ignore_recent=1,
+            )
+        assert result is None
+        # borg create + borg list
+        assert mock_subprocess.call_count == 2
 
     def test_load_config_backup_missing_file(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
@@ -366,7 +539,7 @@ class TestRunBackups:
     def test_all_profiles(
         self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out = tmp_path / "borg"
         out.mkdir()
         inp = tmp_path / "input"
@@ -386,7 +559,8 @@ class TestRunBackups:
         )
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backups(cfg)
-        assert mock_subprocess.call_count == 2
+        # 2 profiles x (borg create + borg list) = 4 calls
+        assert mock_subprocess.call_count == 4
         # Verify KeePass instance is reused between profiles
         assert mock_keepass.call_count == 1
 
@@ -394,7 +568,7 @@ class TestRunBackups:
     def test_single_profile(
         self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out = tmp_path / "borg"
         out.mkdir()
         inp = tmp_path / "input"
@@ -412,8 +586,34 @@ class TestRunBackups:
         )
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backups(cfg, profile_name="p1")
-        assert mock_subprocess.call_count == 1
+        # 1 profile x (borg create + borg list) = 2 calls
+        assert mock_subprocess.call_count == 2
         mock_keepass.assert_called_once()
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_ignore_recent_skips_profile(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        # Create the last_run.dat file with a recent timestamp
+        out = tmp_path / "borg"
+        out.mkdir()
+        last_run_file = out / "last_run.dat"
+        last_run_file.write_text("2099-01-01_00-00-00")
+        inp = tmp_path / "input"
+        inp.mkdir()
+        cfg = ConfigAllBackups(
+            database_path=tmp_path / "test.kdbx",
+            profiles={
+                "p1": ConfigBackup(
+                    type="borg", title="borg", input=[str(inp)], output=str(out)
+                ),
+            },
+        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            run_backups(cfg, ignore_recent=999999999)
+        # No subprocess calls — backup skipped due to ignore_recent
+        assert mock_subprocess.call_count == 0
 
     def test_unknown_profile_raises_value_error(self, tmp_path: Path) -> None:
         out = tmp_path / "borg"
@@ -435,7 +635,7 @@ class TestRunBackups:
     def test_config_from_path(
         self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out = tmp_path / "borg"
         out.mkdir()
         inp = tmp_path / "input"
@@ -455,7 +655,8 @@ class TestRunBackups:
         config_path.write_text(yaml.safe_dump(data))
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
             run_backups(config_path)
-        assert mock_subprocess.call_count == 1
+        # borg create + borg list
+        assert mock_subprocess.call_count == 2
 
 
 class TestCli:
@@ -464,7 +665,7 @@ class TestCli:
     runner = CliRunner()
 
     def test_run_missing_config(self) -> None:
-        result = self.runner.invoke(app, ["/nonexistent/config.yml"])
+        result = self.runner.invoke(app, ["run", "/nonexistent/config.yml"])
         assert result.exit_code == 1
         assert "not found" in result.output.lower() or "Error" in result.output
 
@@ -475,7 +676,7 @@ class TestCli:
         }
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(data))
-        result = self.runner.invoke(app, [str(path), "--profile", "missing"])
+        result = self.runner.invoke(app, ["run", str(path), "--profile", "missing"])
         assert result.exit_code == 1
         assert "not found" in result.output.lower()
 
@@ -483,7 +684,7 @@ class TestCli:
     def test_run_success(
         self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out = tmp_path / "borg"
         out.mkdir()
         inp = tmp_path / "input"
@@ -502,14 +703,14 @@ class TestCli:
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(data))
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
-            result = self.runner.invoke(app, [str(path), "--profile", "p1"])
+            result = self.runner.invoke(app, ["run", str(path), "--profile", "p1"])
         assert result.exit_code == 0, f"Output: {result.output}"
 
     @patch("backup_keepass_unlock.backup.subprocess.run")
     def test_run_all_profiles(
         self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
     ) -> None:
-        mock_subprocess.return_value = MagicMock(returncode=0)
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         out = tmp_path / "borg"
         out.mkdir()
         inp = tmp_path / "input"
@@ -534,6 +735,40 @@ class TestCli:
         path = tmp_path / "config.yml"
         path.write_text(yaml.safe_dump(data))
         with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
-            result = self.runner.invoke(app, [str(path)])
+            result = self.runner.invoke(app, ["run", str(path)])
         assert result.exit_code == 0, f"Output: {result.output}"
-        assert mock_subprocess.call_count == 2
+        assert mock_subprocess.call_count == 4
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_ignore_recent_cli_skips(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "borg"
+        out.mkdir()
+        # Create the last_run.dat file with a recent timestamp
+        last_run_file = out / "last_run.dat"
+        last_run_file.write_text("2099-01-01_00-00-00")
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        with patch("backup_keepass_unlock.backup.KeePass", mock_keepass):
+            result = self.runner.invoke(
+                app,
+                ["run", str(path), "--profile", "p1", "--ignore-recent", "999999999"],
+            )
+        assert result.exit_code == 0, f"Output: {result.output}"
+        # No subprocess calls — backup skipped due to ignore_recent
+        assert mock_subprocess.call_count == 0

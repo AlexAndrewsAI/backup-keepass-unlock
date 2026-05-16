@@ -77,7 +77,7 @@ uv run pytest -v
 uv run pytest -s
 
 # Manually run a single test backup profile
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test-backup
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --profile test-backup
 ```
 
 ### Code Quality
