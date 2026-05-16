@@ -772,3 +772,172 @@ class TestCli:
         assert result.exit_code == 0, f"Output: {result.output}"
         # No subprocess calls — backup skipped due to ignore_recent
         assert mock_subprocess.call_count == 0
+
+    def test_last_missing_config(self) -> None:
+        result = self.runner.invoke(app, ["last", "/nonexistent/config.yml"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower() or "Error" in result.output
+
+    def test_last_invalid_profile(self, tmp_path: Path) -> None:
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {},
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        result = self.runner.invoke(app, ["last", str(path), "--profile", "missing"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_last_single_profile(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="2024-01-01_00-00-00"
+        )
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.cli.KeePass", mock_keepass):
+            result = self.runner.invoke(app, ["last", str(path), "--profile", "p1"])
+        assert result.exit_code == 0, f"Output: {result.output}"
+        assert "=== p1 ===" in result.output
+        assert "Time since last backup:" in result.output
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_last_all_profiles(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="2024-01-01_00-00-00"
+        )
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                },
+                "p2": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                },
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.cli.KeePass", mock_keepass):
+            result = self.runner.invoke(app, ["last", str(path)])
+        assert result.exit_code == 0, f"Output: {result.output}"
+        assert "=== p1 ===" in result.output
+        assert "=== p2 ===" in result.output
+        assert "Time since last backup:" in result.output
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_last_no_archives(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.cli.KeePass", mock_keepass):
+            result = self.runner.invoke(app, ["last", str(path), "--profile", "p1"])
+        assert result.exit_code == 0, f"Output: {result.output}"
+        assert "=== p1 ===" in result.output
+        assert "No archives found" in result.output
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_last_entry_not_found(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        mock_keepass.return_value.find_entries.return_value = []
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.cli.KeePass", mock_keepass):
+            result = self.runner.invoke(app, ["last", str(path), "--profile", "p1"])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower()
+
+    @patch("backup_keepass_unlock.backup.subprocess.run")
+    def test_last_password_not_found(
+        self, mock_subprocess: MagicMock, mock_keepass: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
+        mock_entry = MagicMock()
+        mock_entry.get_password.return_value = None
+        mock_keepass.return_value.find_entries.return_value = [mock_entry]
+        out = tmp_path / "borg"
+        out.mkdir()
+        inp = tmp_path / "input"
+        inp.mkdir()
+        data = {
+            "database_path": str(tmp_path / "test.kdbx"),
+            "profiles": {
+                "p1": {
+                    "type": "borg",
+                    "title": "borg",
+                    "input": [str(inp)],
+                    "output": str(out),
+                }
+            },
+        }
+        path = tmp_path / "config.yml"
+        path.write_text(yaml.safe_dump(data))
+        with patch("backup_keepass_unlock.cli.KeePass", mock_keepass):
+            result = self.runner.invoke(app, ["last", str(path), "--profile", "p1"])
+        assert result.exit_code == 1
+        assert "Password not found" in result.output
