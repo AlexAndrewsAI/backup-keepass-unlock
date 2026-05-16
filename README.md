@@ -37,11 +37,17 @@ The package includes a CLI tool built with **typer**:
 
 ```bash
 # Run all profiles in a config file
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml
 
 # Run a specific backup profile
-uv run python3 -m backup_keepass_unlock.cli tests/backup.yml --profile test2
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --profile test2
+
+# Run backups but skip if they were run in the last hour (3600 seconds)
+uv run python3 -m backup_keepass_unlock.cli run tests/backup.yml --ignore-recent 3600
 ```
+
+#### Skipping Frequent Backups
+The `--ignore-recent` flag (given in seconds) allows you to skip backups that were recently completed. This is useful for automated tasks (like crontabs) to prevent redundant backups if the script runs too frequently.
 
 ## Development
 
